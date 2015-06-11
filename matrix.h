@@ -7,6 +7,8 @@
 #include <fstream>
 #include <cstdlib>
 #include <ctime>
+#include <cassert>
+#include "mpi.h"
 
 #define PRINT_ALL  9
 #define PRINT_MOST 5
@@ -89,7 +91,24 @@ public:
 public:
     void WritePS(const string filename)const; 
     void WriteMatlabDense(const string filename)const; 
-    void ReadMatlabDense(const string filename); 
+    void ReadMatlabDense(const string filename);
+    MatrixDense MultiplySlice(const int row_begin, const int row_end,
+                              const int col_begin, const int col_end,
+                              const MatrixDense &B,
+                              const int B_row_begin, const int B_row_end,
+                              const int B_col_begin, const int B_col_end)const;
+    MatrixDense MultiplySliceTransform(
+                              const int row_begin, const int row_end,
+                              const int col_begin, const int col_end,
+                              const MatrixDense &B,
+                              const int B_row_begin, const int B_row_end,
+                              const int B_col_begin, const int B_col_end)const;
+    MatrixDense MultiplyDirect(const MatrixDense &B)const; // A*B
+    MatrixDense MultiplyTransform(const MatrixDense &B)const; // A*B_T
+    MatrixDense MultiplyMPI(const MatrixDense &B, const MPI_Comm comm)const; // A*B
+    MatrixDense Transform()const;
+    MatrixDense Sub(const int row_begin, const int row_end,
+                    const int col_begin, const int col_end)const;
 };
 
 #if 0
@@ -595,5 +614,151 @@ void MatrixDense<Type>::ReadMatlabDense(const string filename)
     fin.close();
 }
 
+template <typename Type>
+MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
+                         const int row_begin, const int row_end,
+                         const int col_begin, const int col_end,
+                         const MatrixDense &B,
+                         const int B_row_begin, const int B_row_end,
+                         const int B_col_begin, const int B_col_end)const
+{
+#if DEBUG_MODE > PRINT_ALL
+    cout << MatrixBase::GetName() 
+	 << ": calling MatrixDense::MultiplySlice(...)" << endl;
+#endif
+    assert( row_begin>=0 && row_end<MatrixBase::GetNRow() && 
+            col_begin>=0 && col_end<MatrixBase::GetNCol() &&
+            B_row_begin>=0 && B_row_end<B.GetNRow() && 
+            B_col_begin>=0 && B_col_end<B.GetNCol() &&
+            row_end>=row_begin && col_end>=col_begin &&
+            B_row_end>=B_row_begin && B_col_end>=B_col_begin);
+            
+    int nrow1 = row_end - row_begin + 1;
+    int ncol1 = col_end - col_begin + 1;
+    int nrow2 = B_row_end - B_row_begin + 1;
+    int ncol2 = B_col_end - B_col_begin + 1;
+    
+
+    if( ncol1 != nrow2 ) 
+    {
+	cout << "ERROR in MatrixDense::MultiplySlice : Matrix dimensions must agree." << endl;
+	return MatrixDense<Type>();
+    }
+
+    clock_t start, end;
+    start = clock();
+    
+    MatrixDense<Type> C(nrow1, ncol2, "PRODUCT");
+    if( nrow1!=0 && ncol1!=0 && ncol2!=0 )
+    {
+        //printf("Progress: ");
+        for( int i(0); i<nrow1; i++ )
+        {
+	    for( int j(0); j<ncol2; j++ )
+	    {
+	        for( int k(0); k<ncol1; k++ )
+	        {
+		    C.val[i][j] += val[i+row_begin][k+col_begin] * B.val[k+B_row_begin][j+B_col_begin];
+		    //C.val[i][j] += val[i][k] * B.val[j][k];
+	        }
+	    }
+        }
+        //printf("\n");
+    }
+    end = clock();
+    double time = (double)(end - start) / CLOCKS_PER_SEC;
+    printf("MatrixDense::MultiplySlice---time = %f\n", time);
+
+    return C;
+}
+
+template <typename Type>
+MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
+                              const int row_begin, const int row_end,
+                              const int col_begin, const int col_end,
+                              const MatrixDense &B,
+                              const int B_row_begin, const int B_row_end,
+                              const int B_col_begin, const int B_col_end)const
+{
+#if DEBUG_MODE > PRINT_ALL
+    cout << MatrixBase::GetName() 
+	 << ": calling MatrixDense::MultiplySliceTransform(...)" << endl;
+#endif
+    assert( row_begin>=0 && row_end<MatrixBase::GetNRow() && 
+            col_begin>=0 && col_end<MatrixBase::GetNCol() &&
+            B_row_begin>=0 && B_row_end<B.GetNRow() && 
+            B_col_begin>=0 && B_col_end<B.GetNCol() &&
+            row_end>=row_begin && col_end>=col_begin &&
+            B_row_end>=B_row_begin && B_col_end>=B_col_begin);
+            
+    int nrow1 = row_end - row_begin + 1;
+    int ncol1 = col_end - col_begin + 1;
+    int nrow2 = B_row_end - B_row_begin + 1;
+    int ncol2 = B_col_end - B_col_begin + 1;
+    
+
+    if( ncol1 != ncol2 ) 
+    {
+	cout << "ERROR in MatrixDense::MultiplySliceTransform : Matrix dimensions must agree." << endl;
+	return MatrixDense<Type>();
+    }
+
+    clock_t start, end;
+    start = clock();
+    
+    MatrixDense<Type> C(nrow1, nrow2, "PRODUCT");
+    if( nrow1!=0 && ncol1!=0 && nrow2!=0 )
+    {
+        //printf("Progress: ");
+        for( int i(0); i<nrow1; i++ )
+        {
+	    for( int j(0); j<nrow2; j++ )
+	    {
+	        for( int k(0); k<ncol1; k++ )
+	        {
+		    C.val[i][j] += val[i+row_begin][k+col_begin] * B.val[j+B_row_begin][k+B_col_begin];
+	        }
+	    }
+        }
+        //printf("\n");
+    }
+    end = clock();
+    double time = (double)(end - start) / CLOCKS_PER_SEC;
+    printf("MatrixDense::MultiplySliceTransform---time = %f\n", time);
+
+    return C;
+}
+
+
+
+
+template <typename Type>
+MatrixDense<Type> MatrixDense<Type>::MultiplyDirect(const MatrixDense &B)const
+{
+#if DEBUG_MODE > PRINT_ALL
+    cout << MatrixBase::GetName() 
+	 << ": calling MatrixDense::MultiplyDirect(...)" << endl;
+#endif
+    int nrow1 = MatrixBase::GetNRow();
+    int ncol1 = MatrixBase::GetNCol();
+    int nrow2 = B.GetNRow();
+    int ncol2 = B.GetNCol();
+
+    if( ncol1 != nrow2 ) 
+    {
+	cout << "ERROR in MatrixDense::MultiplyDirect : Matrix dimensions must agree." << endl;
+	return MatrixDense<Type>();
+    }
+    
+    return MultiplySlice(   0, nrow1-1, 0, ncol1-1,
+                    B, 0, nrow2-1, 0, ncol2-1);
+}
+/*
+MatrixDense MultiplyTransform(const MatrixDense &B)const; // A*B_T
+MatrixDense MultiplyMPI(const MatrixDense &B, const MPI_Comm comm)const; // A*B
+MatrixDense Transform()const;
+MatrixDense Sub(const int row_begin, const int row_end,
+                    const int col_begin, const int col_end)const;
+*/
 }
 #endif
