@@ -109,6 +109,7 @@ public:
     MatrixDense Transform()const;
     MatrixDense Sub(const int row_begin, const int row_end,
                     const int col_begin, const int col_end)const;
+    int IsZero() const;
 };
 
 #if 0
@@ -412,6 +413,7 @@ MatrixDense<Type> MatrixDense<Type>::operator+(const MatrixDense<Type> &B)const
     return C;
 }
 
+
 template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::operator-(const MatrixDense<Type> &B)const
 {
@@ -645,8 +647,10 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
 	return MatrixDense<Type>();
     }
 
+#if DEBUG_MODE > PRINT_FEW
     clock_t start, end;
     start = clock();
+#endif
     
     MatrixDense<Type> C(nrow1, ncol2, "PRODUCT");
     if( nrow1!=0 && ncol1!=0 && ncol2!=0 )
@@ -659,15 +663,17 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
 	        for( int k(0); k<ncol1; k++ )
 	        {
 		    C.val[i][j] += val[i+row_begin][k+col_begin] * B.val[k+B_row_begin][j+B_col_begin];
-		    //C.val[i][j] += val[i][k] * B.val[j][k];
 	        }
 	    }
         }
         //printf("\n");
     }
+    
+#if DEBUG_MODE > PRINT_FEW
     end = clock();
     double time = (double)(end - start) / CLOCKS_PER_SEC;
     printf("MatrixDense::MultiplySlice---time = %f\n", time);
+#endif
 
     return C;
 }
@@ -703,8 +709,10 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
 	return MatrixDense<Type>();
     }
 
+#if DEBUG_MODE > PRINT_FEW
     clock_t start, end;
     start = clock();
+#endif
     
     MatrixDense<Type> C(nrow1, nrow2, "PRODUCT");
     if( nrow1!=0 && ncol1!=0 && nrow2!=0 )
@@ -722,15 +730,15 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
         }
         //printf("\n");
     }
+    
+#if DEBUG_MODE > PRINT_FEW
     end = clock();
     double time = (double)(end - start) / CLOCKS_PER_SEC;
     printf("MatrixDense::MultiplySliceTransform---time = %f\n", time);
+#endif
 
     return C;
 }
-
-
-
 
 template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::MultiplyDirect(const MatrixDense &B)const
@@ -751,14 +759,217 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyDirect(const MatrixDense &B)const
     }
     
     return MultiplySlice(   0, nrow1-1, 0, ncol1-1,
-                    B, 0, nrow2-1, 0, ncol2-1);
+                         B, 0, nrow2-1, 0, ncol2-1);
 }
-/*
-MatrixDense MultiplyTransform(const MatrixDense &B)const; // A*B_T
-MatrixDense MultiplyMPI(const MatrixDense &B, const MPI_Comm comm)const; // A*B
-MatrixDense Transform()const;
-MatrixDense Sub(const int row_begin, const int row_end,
-                    const int col_begin, const int col_end)const;
-*/
+
+template <typename Type>
+MatrixDense<Type> MatrixDense<Type>::MultiplyTransform(const MatrixDense &B)const
+{
+#if DEBUG_MODE > PRINT_ALL
+    cout << MatrixBase::GetName() 
+	 << ": calling MatrixDense::MultiplyTransform(...)" << endl;
+#endif
+    int nrow1 = MatrixBase::GetNRow();
+    int ncol1 = MatrixBase::GetNCol();
+    int nrow2 = B.GetNRow();
+    int ncol2 = B.GetNCol();
+
+    if( ncol1 != ncol2 ) 
+    {
+	cout << "ERROR in MatrixDense::MultiplyTransform : Matrix dimensions must agree." << endl;
+	return MatrixDense<Type>();
+    }
+    
+    return MultiplySliceTransform(   0, nrow1-1, 0, ncol1-1,
+                                  B, 0, nrow2-1, 0, ncol2-1);
+}
+
+template <typename Type>
+MatrixDense<Type> MatrixDense<Type>::Transform()const
+{
+#if DEBUG_MODE > PRINT_ALL
+    cout << MatrixBase::GetName() 
+	 << ": calling MatrixDense::Transform()" << endl;
+#endif
+    int nrow = MatrixBase::GetNRow();
+    int ncol = MatrixBase::GetNCol();
+
+    MatrixDense<Type> A_T(ncol, nrow, "TRANSFORM");
+    if( nrow!=0 && ncol!=0 )
+    {
+        if( val!=0 )
+        {
+	    for( int i(0); i<nrow; i++ )
+                for( int j(0); j<ncol; j++ )
+	            A_T.val[j][i] = val[i][j];
+	}
+    }
+    else
+    {
+	A_T.val = 0;
+    }
+    
+    return A_T; 
+}
+
+
+template <typename Type>
+MatrixDense<Type> MatrixDense<Type>::Sub(
+                    const int row_begin, const int row_end,
+                    const int col_begin, const int col_end)const
+{
+#if DEBUG_MODE > PRINT_ALL
+    cout << MatrixBase::GetName() 
+	 << ": calling MatrixDense::Sub(...)" << endl;
+#endif
+    int nrow = MatrixBase::GetNRow();
+    int ncol = MatrixBase::GetNCol();
+    assert( row_begin>=0 && row_end<nrow && 
+            col_begin>=0 && col_end<ncol &&
+            row_end>=row_begin && col_end>=col_begin);
+            
+    int nrow1 = row_end - row_begin + 1;
+    int ncol1 = col_end - col_begin + 1;
+
+#if DEBUG_MODE > PRINT_FEW    
+    clock_t start, end;
+    start = clock();
+#endif
+    
+    MatrixDense<Type> S(nrow1, ncol1, "SUB");
+    if( nrow1!=0 && ncol1!=0 )
+    {
+        for( int i(0); i<nrow1; i++ )
+        {
+	    for( int j(0); j<ncol1; j++ )
+	    {
+		S.val[i][j] += val[i+row_begin][j+col_begin];
+	    }
+        }
+    }
+
+#if DEBUG_MODE > PRINT_FEW
+    end = clock();
+    double time = (double)(end - start) / CLOCKS_PER_SEC;
+    printf("MatrixDense::Sub---time = %f\n", time);
+#endif
+
+    return S;
+}
+
+template <typename Type>
+MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI_Comm comm)const
+{
+#if DEBUG_MODE > PRINT_ALL
+    cout << MatrixBase::GetName() 
+	 << ": calling MatrixDense::MultiplyMPI(...)" << endl;
+#endif
+    int node, total_node, namelen;
+    char processor_name[MPI_MAX_PROCESSOR_NAME];
+    MPI_Status status;
+
+    MPI_Comm_size( comm, &total_node );
+    MPI_Comm_rank( comm, &node );
+    MPI_Get_processor_name( processor_name, &namelen );
+
+    //cout << "MPI total_node = " << total_node << endl;
+
+    int nrow1 = MatrixBase::GetNRow();
+    int ncol1 = MatrixBase::GetNCol();
+    int nrow2 = B.GetNRow();
+    int ncol2 = B.GetNCol();
+
+    assert( nrow1!=0 && ncol1!=0 && ncol2!=0 && ncol1==nrow2 );
+    assert( nrow1%total_node==0 && ncol1%total_node==0 && ncol2%total_node==0 );
+
+    MatrixDense<Type> B_T = B.Transform();
+
+    MatrixDense<Type> Ci;
+    
+    // 把 A 按行分成 total_node 份 Ai
+    // 每个 node=i 计算 Ai*B
+    // 把 B 转置，调用下面的函数
+    // 未测试 直接做矩阵相乘 与 先转置再调用转置版本相乘 的效率
+    int sub_nrow = nrow1/total_node;
+    Ci = MultiplySliceTransform( node*sub_nrow, (node+1)*sub_nrow-1,
+	                         0, ncol1-1,
+				 B_T,
+				 0, ncol2-1, 0, nrow2-1 ); 
+    MatrixDense<Type> C;
+    if( node == 0 )
+    {
+	C = MatrixDense<Type>( nrow1, ncol2, "PRODUCT_MPI" );
+	for( int i(0); i<sub_nrow; i++ )
+	{
+	    for( int j(0); j<ncol2; j++ )
+	    {
+		C.val[i][j] = Ci.val[i][j];
+	    }
+	}
+    }
+    
+    MPI_Datatype datatype;
+    if( sizeof(Type)==sizeof(int) )
+	datatype = MPI_INT;
+    else
+	datatype = MPI_DOUBLE;
+
+    Type *Ci_mpi = new Type [ncol2*sub_nrow];
+
+    if( node != 0 )
+    {
+	//cout << endl << "node " << node << ": prepare to send data at " << clock() << endl;
+	int k = 0;
+	for( int i(0); i<sub_nrow; i++ )
+	{
+	    for( int j(0); j<ncol2; j++ )
+	    {
+		Ci_mpi[k++] = Ci.val[i][j];
+	    }
+	}
+	MPI_Send( Ci_mpi, ncol2*sub_nrow, datatype, 0, 1, comm );
+	//cout << endl << "node " << node << ": send data over at " << clock() << endl;
+    }
+    else
+    {
+	//cout << endl << "node " << node << ": prepare to recv data at " << clock() << endl;
+	for( int n(1); n<total_node; n++ )
+	{
+	    MPI_Recv( Ci_mpi, ncol2*sub_nrow, datatype, n, 1, comm, &status );
+	    int k = 0;
+	    for( int i(0); i<sub_nrow; i++ )
+	    {
+		for( int j(0); j<ncol2; j++ )
+		{
+		    C.val[n*sub_nrow+i][j] = Ci_mpi[k++];
+		}
+	    }
+	    //cout << endl << "node " << node << ": recv data from " << n << " at " << clock() << endl;
+	}
+	//cout << endl << "node " << node << ": all data received at " << clock() << endl;
+    }
+
+    delete [] Ci_mpi;
+
+    return C;
+}
+template <typename Type>
+int MatrixDense<Type>::IsZero() const
+{
+    int nrow = MatrixBase::GetNRow();
+    int ncol = MatrixBase::GetNCol();
+
+    for( int i(0); i<nrow; i++ )
+    {
+	for( int j(0); j<ncol; j++ )
+	{
+	    if( val[i][j] != 0 )
+		return 0;
+	}
+    }
+
+    return 1;
+}
+
 }
 #endif
