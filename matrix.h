@@ -880,7 +880,7 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
     int ncol2 = B.GetNCol();
 
     assert( nrow1!=0 && ncol1!=0 && ncol2!=0 && ncol1==nrow2 );
-    assert( nrow1%total_node==0 && ncol1%total_node==0 && ncol2%total_node==0 );
+    assert( nrow1%total_node==0 && ncol1%total_node==0 );// && ncol2%total_node==0 );
 
     MatrixDense<Type> B_T = B.Transform();
 
@@ -953,6 +953,7 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 
     return C;
 }
+
 template <typename Type>
 int MatrixDense<Type>::IsZero() const
 {
