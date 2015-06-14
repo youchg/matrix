@@ -11,15 +11,16 @@ using namespace MATRIX;
 
 int main( int argc, char *argv[] )
 {
+    clock_t start, end, start0, end0;
+    double time;
+    int multi;
+    
+    start0 = clock();
     MPI_Init( &argc, &argv );
 
     int node, total_node;
     MPI_Comm_size( MPI_COMM_WORLD, &total_node );
     MPI_Comm_rank( MPI_COMM_WORLD, &node );
- 
-    clock_t start, end;
-    double time;
-    int multi;
     //cout << "node: " << node << "输入矩阵倍数: " << endl;
     //cin >> multi;
     //cout << "node: " << node << "已接受" << endl;
@@ -35,7 +36,7 @@ int main( int argc, char *argv[] )
     MatrixDense<double> B(nrow2, ncol2, "bbb");
     B.SetAllValue(13, "dRANDOM");
     //MatrixDense<double> C = A*B;
-    
+    /*
     start = clock();
     MatrixDense<double> D = A.MultiplyDirect(B);
     end = clock();
@@ -50,14 +51,15 @@ int main( int argc, char *argv[] )
     time = (double)(end - start) / CLOCKS_PER_SEC;
     if( node == 0 )
         printf("MultiplyTransform using time = %f\n", time);
-        
+    */    
     start = clock();
     MatrixDense<double> E = A.MultiplyMPI(B, MPI_COMM_WORLD);
     end = clock();
     time = (double)(end - start) / CLOCKS_PER_SEC;
     if( node == 0 )
         printf("MultiplyMPI       using time = %f\n", time);
-        
+    
+    /*    
     if( node == 0 )
     {
         cout << "check result: ";
@@ -70,7 +72,7 @@ int main( int argc, char *argv[] )
         W = E-D;
         cout << ", " << W.IsZero() << endl;
     }
-
+    */
     /*
     MatrixDense<int> A100x100_1;
     A100x100_1.ReadMatlabDense("./data/imat100x100_1.dat");
@@ -114,5 +116,11 @@ int main( int argc, char *argv[] )
     M10x10.WriteMatlabDense("./data/imatM10x10.dat");
     */
     MPI_Finalize();
+    
+    end0 = clock();
+    time = (double)(end0 - start0) / CLOCKS_PER_SEC;
+    if( node == 0 )
+        printf("all time = %f\n", time);
+        
     return 0;
 }
