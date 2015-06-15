@@ -864,6 +864,14 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
     cout << MatrixBase::GetName() 
 	 << ": calling MatrixDense::MultiplyMPI(...)" << endl;
 #endif
+
+    clock_t start, end;
+    double compute_time = 0;
+    double communicate_time = 0;
+    double *all_time = 0;
+    char **all_processor_name = 0;
+    int *all_processor_namelen = 0;
+    
     int node, total_node, namelen;
     char processor_name[MPI_MAX_PROCESSOR_NAME];
     MPI_Status status;
@@ -873,15 +881,19 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
     MPI_Get_processor_name( processor_name, &namelen );
 
     //cout << "MPI total_node = " << total_node << endl;
-
+    
+    start = clock();
     int nrow1 = MatrixBase::GetNRow();
     int ncol1 = MatrixBase::GetNCol();
     int nrow2 = B.GetNRow();
     int ncol2 = B.GetNCol();
+    end = clock();
+    compute_time += (double)(end - start);
 
     assert( nrow1!=0 && ncol1!=0 && ncol2!=0 && ncol1==nrow2 );
     assert( nrow1%total_node==0 && ncol1%total_node==0 );// && ncol2%total_node==0 );
 
+    start = clock();
     MatrixDense<Type> B_T = B.Transform();
 
     MatrixDense<Type> Ci;
@@ -916,9 +928,13 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 
     Type *Ci_mpi = new Type [ncol2*sub_nrow];
 
+    end = clock();
+    compute_time += (double)(end - start);
+    
     if( node != 0 )
     {
 	//cout << endl << "node " << node << ": prepare to send data at " << clock() << endl;
+	start = clock();
 	int k = 0;
 	for( int i(0); i<sub_nrow; i++ )
 	{
@@ -927,7 +943,16 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 		Ci_mpi[k++] = Ci.val[i][j];
 	    }
 	}
+	
+	end = clock();
+        compute_time += (double)(end - start);
+        
+        start = clock();
+        
 	MPI_Send( Ci_mpi, ncol2*sub_nrow, datatype, 0, 1, comm );
+	
+	end = clock();
+        communicate_time += (double)(end - start);
 	//cout << endl << "node " << node << ": send data over at " << clock() << endl;
     }
     else
@@ -935,7 +960,14 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 	//cout << endl << "node " << node << ": prepare to recv data at " << clock() << endl;
 	for( int n(1); n<total_node; n++ )
 	{
+	    start = clock();
+	    
 	    MPI_Recv( Ci_mpi, ncol2*sub_nrow, datatype, n, 1, comm, &status );
+	    
+	    end = clock();
+            communicate_time += (double)(end - start);
+            
+            start = clock();
 	    int k = 0;
 	    for( int i(0); i<sub_nrow; i++ )
 	    {
@@ -944,9 +976,69 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 		    C.val[n*sub_nrow+i][j] = Ci_mpi[k++];
 		}
 	    }
+	    end = clock();
+            compute_time += (double)(end - start);
 	    //cout << endl << "node " << node << ": recv data from " << n << " at " << clock() << endl;
 	}
 	//cout << endl << "node " << node << ": all data received at " << clock() << endl;
+    }
+    
+    if( node != 0 )
+    {
+        compute_time /= CLOCKS_PER_SEC;
+        communicate_time /= CLOCKS_PER_SEC;
+	MPI_Send(     &compute_time,       1, MPI_DOUBLE, 0, 1, comm );
+	MPI_Send( &communicate_time,       1, MPI_DOUBLE, 0, 2, comm );
+	MPI_Send(          &namelen,       1,    MPI_INT, 0, 3, comm );
+	MPI_Send(    processor_name, namelen+1,   MPI_CHAR, 0, 4, comm );// namelen+1 是为了最后一个字符 \0 也发送
+	//printf("node: %d begins to send.\n", node);
+    }
+    else
+    {
+        //printf("node: %d begins to recv.\n", node);
+        compute_time /= CLOCKS_PER_SEC;
+        communicate_time /= CLOCKS_PER_SEC;
+        all_time = new double [total_node*2];
+        all_time[0] = compute_time;
+        all_time[1] = communicate_time;
+        
+	all_processor_name = new char* [total_node];
+	all_processor_name[0] = new char [MPI_MAX_PROCESSOR_NAME];
+	strcpy( all_processor_name[0], processor_name );
+	
+	all_processor_namelen = new int [total_node];
+	all_processor_namelen[0] = namelen;
+	
+	for( int n(1); n<total_node; n++ )
+	{
+	    MPI_Recv( &all_time[2*n]  , 1, MPI_DOUBLE, n, 1, comm, &status );
+	    MPI_Recv( &all_time[2*n+1], 1, MPI_DOUBLE, n, 2, comm, &status );
+	    MPI_Recv( &all_processor_namelen[n], 1, MPI_INT, n, 3, comm, &status );
+	    all_processor_name[n] = new char [MPI_MAX_PROCESSOR_NAME];
+	    MPI_Recv( all_processor_name[n], all_processor_namelen[n]+1, MPI_CHAR, n, 4, comm, &status );
+	}
+	
+	compute_time = 0;
+	communicate_time = 0;
+	printf("\n====================== mpi details ======================\n");
+	printf("node       name     compute    communicate    total\n");
+	for( int n(0); n<total_node; n++ )
+	{
+	    compute_time += all_time[2*n];
+	    communicate_time += all_time[2*n+1];
+	    printf("%3d %10s %12.6f %12.6f %12.6f\n", n, all_processor_name[n], 
+	                all_time[2*n], all_time[2*n+1], all_time[2*n]+all_time[2*n+1] );
+	    
+	}
+	printf("---------------------------------------------------------\n");
+	printf("%3s %10s %12.6f %12.6f %12.6f\n", "-", "total", 
+	                compute_time, communicate_time, compute_time+communicate_time);
+	printf("=========================================================\n");
+	delete [] all_time;
+	delete [] all_processor_namelen;
+	for( int n(0); n<total_node; n++ )
+	    delete [] all_processor_name[n];
+	delete [] all_processor_name;
     }
 
     delete [] Ci_mpi;
