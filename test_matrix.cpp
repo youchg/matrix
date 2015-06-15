@@ -57,7 +57,7 @@ int main( int argc, char *argv[] )
     end = clock();
     time = (double)(end - start) / CLOCKS_PER_SEC;
     if( node == 0 )
-        printf("MultiplyMPI       using time = %f\n", time);
+        printf("Calling MultiplyMPI() time = %f\n", time);
     
     /*    
     if( node == 0 )
@@ -120,7 +120,7 @@ int main( int argc, char *argv[] )
     end0 = clock();
     time = (double)(end0 - start0) / CLOCKS_PER_SEC;
     if( node == 0 )
-        printf("all time = %f\n", time);
+        printf("main time = %f\n", time);
         
     return 0;
 }
