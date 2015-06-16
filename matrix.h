@@ -501,21 +501,20 @@ MatrixDense<Type>  MatrixDense<Type>::operator*(const MatrixDense<Type> &B)const
     MatrixDense<Type> C(nrow1, ncol2, "PRODUCT");
     if( nrow1!=0 && ncol1!=0 && ncol2!=0 )
     {
-        //printf("Progress: ");
+        Type tmp;
         for( int i(0); i<nrow1; i++ )
         {
-            //if( i%(nrow1/10) == 0 )
-                //printf("%d%%, ", i*100/nrow1);
 	    for( int j(0); j<ncol2; j++ )
 	    {
+	        tmp = 0;
 	        for( int k(0); k<ncol1; k++ )
 	        {
-		    C.val[i][j] += val[i][k] * B.val[k][j];
-		    //C.val[i][j] += val[i][k] * B.val[j][k];
+		    tmp += val[i][k] * B.val[k][j];
+		    //C.val[i][j] += val[i][k] * B.val[k][j];
 	        }
+	        C.val[i][j] = tmp;
 	    }
         }
-        //printf("\n");
     }
     end = clock();
     double time = (double)(end - start) / CLOCKS_PER_SEC;
@@ -655,18 +654,19 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
     MatrixDense<Type> C(nrow1, ncol2, "PRODUCT");
     if( nrow1!=0 && ncol1!=0 && ncol2!=0 )
     {
-        //printf("Progress: ");
+        Type tmp;
         for( int i(0); i<nrow1; i++ )
         {
 	    for( int j(0); j<ncol2; j++ )
 	    {
+	        tmp = 0;
 	        for( int k(0); k<ncol1; k++ )
 	        {
-		    C.val[i][j] += val[i+row_begin][k+col_begin] * B.val[k+B_row_begin][j+B_col_begin];
+		    tmp += val[i+row_begin][k+col_begin] * B.val[k+B_row_begin][j+B_col_begin];
 	        }
+	        C.val[i][j] = tmp;
 	    }
         }
-        //printf("\n");
     }
     
 #if DEBUG_MODE > PRINT_FEW
@@ -715,20 +715,60 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
 #endif
     
     MatrixDense<Type> C(nrow1, nrow2, "PRODUCT");
+    //printf("nrow1 = %d, ncol1 = %d, nrow2 = %d, ncol2 = %d \n", nrow1, ncol1, nrow2, ncol2);
     if( nrow1!=0 && ncol1!=0 && nrow2!=0 )
     {
-        //printf("Progress: ");
+        /*
+        Type tmp;
         for( int i(0); i<nrow1; i++ )
         {
 	    for( int j(0); j<nrow2; j++ )
 	    {
+	        tmp = 0;
 	        for( int k(0); k<ncol1; k++ )
 	        {
-		    C.val[i][j] += val[i+row_begin][k+col_begin] * B.val[j+B_row_begin][k+B_col_begin];
+		    tmp += val[i+row_begin][k+col_begin] * B.val[j+B_row_begin][k+B_col_begin];
+		    //C.val[i][j] += val[i+row_begin][k+col_begin] * B.val[j+B_row_begin][k+B_col_begin];
 	        }
+	        C.val[i][j] = tmp;
 	    }
         }
-        //printf("\n");
+        */
+        Type ** Aval = val + row_begin;
+        Type ** Bval = B.val + B_row_begin;
+        Type ** Cval = C.val;
+        Type tmp;
+        
+        if( col_begin==0 && B_col_begin==0 )
+        {
+            for( int i(0); i<nrow1; i++ )
+            {
+	        for( int j(0); j<nrow2; j++ )
+	        {
+	            tmp = 0;
+	            for( int k(0); k<ncol1; k++ )
+	            {
+	    	        tmp += Aval[i][k] * Bval[j][k];
+	            }
+	            Cval[i][j] = tmp;
+	        }
+            }
+        }
+        else
+        {
+            for( int i(0); i<=nrow1; i++ )
+            {
+	        for( int j(0); j<=nrow2; j++ )
+	        {
+	            tmp = 0;
+	            for( int k(0); k<ncol1; k++ )
+	            {
+	    	        tmp += Aval[i][k+col_begin] * Bval[j][k+B_col_begin];
+	            }
+	            Cval[i][j] = tmp;
+	        }
+            }
+        }
     }
     
 #if DEBUG_MODE > PRINT_FEW
@@ -843,7 +883,7 @@ MatrixDense<Type> MatrixDense<Type>::Sub(
         {
 	    for( int j(0); j<ncol1; j++ )
 	    {
-		S.val[i][j] += val[i+row_begin][j+col_begin];
+		S.val[i][j] = val[i+row_begin][j+col_begin];
 	    }
         }
     }
@@ -903,10 +943,15 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
     // 把 B 转置，调用下面的函数
     // 未测试 直接做矩阵相乘 与 先转置再调用转置版本相乘 的效率
     int sub_nrow = nrow1/total_node;
+    clock_t start11, end11;
+    start11 = clock();
     Ci = MultiplySliceTransform( node*sub_nrow, (node+1)*sub_nrow-1,
 	                         0, ncol1-1,
 				 B_T,
-				 0, ncol2-1, 0, nrow2-1 ); 
+				 0, ncol2-1, 0, nrow2-1 );
+    end11 = clock();
+    if(node == 0)
+        printf("node = %d, time0 = %f\n", node, (double)(end11-start11)/CLOCKS_PER_SEC);
     MatrixDense<Type> C;
     if( node == 0 )
     {
@@ -933,7 +978,6 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
     
     if( node != 0 )
     {
-	//cout << endl << "node " << node << ": prepare to send data at " << clock() << endl;
 	start = clock();
 	int k = 0;
 	for( int i(0); i<sub_nrow; i++ )
@@ -944,30 +988,30 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 	    }
 	}
 	
-	end = clock();
-        compute_time += (double)(end - start);
+	//end = clock();
+        //compute_time += (double)(end - start);
+        //communicate_time += (double)(end - start);
         
-        start = clock();
+        //start = clock();
         
 	MPI_Send( Ci_mpi, ncol2*sub_nrow, datatype, 0, 1, comm );
 	
 	end = clock();
         communicate_time += (double)(end - start);
-	//cout << endl << "node " << node << ": send data over at " << clock() << endl;
     }
     else
     {
-	//cout << endl << "node " << node << ": prepare to recv data at " << clock() << endl;
 	for( int n(1); n<total_node; n++ )
 	{
 	    start = clock();
 	    
 	    MPI_Recv( Ci_mpi, ncol2*sub_nrow, datatype, n, 1, comm, &status );
 	    
-	    end = clock();
-            communicate_time += (double)(end - start);
+	    //end = clock();
+	    //printf("Recv from %d: time = %f\n", n, (double)(end - start)/CLOCKS_PER_SEC);
+            //communicate_time += (double)(end - start);
             
-            start = clock();
+            //start = clock();
 	    int k = 0;
 	    for( int i(0); i<sub_nrow; i++ )
 	    {
@@ -977,25 +1021,25 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 		}
 	    }
 	    end = clock();
-            compute_time += (double)(end - start);
-	    //cout << endl << "node " << node << ": recv data from " << n << " at " << clock() << endl;
+            //compute_time += (double)(end - start);
+            communicate_time += (double)(end - start);
+            //printf("Recv from %d: time = %f\n", n, (double)(end - start)/CLOCKS_PER_SEC);
+	    
 	}
-	//cout << endl << "node " << node << ": all data received at " << clock() << endl;
     }
+    
     
     if( node != 0 )
     {
         compute_time /= CLOCKS_PER_SEC;
         communicate_time /= CLOCKS_PER_SEC;
-	MPI_Send(     &compute_time,       1, MPI_DOUBLE, 0, 1, comm );
-	MPI_Send( &communicate_time,       1, MPI_DOUBLE, 0, 2, comm );
-	MPI_Send(          &namelen,       1,    MPI_INT, 0, 3, comm );
-	MPI_Send(    processor_name, namelen+1,   MPI_CHAR, 0, 4, comm );// namelen+1 是为了最后一个字符 \0 也发送
-	//printf("node: %d begins to send.\n", node);
+	MPI_Send(     &compute_time,       1, MPI_DOUBLE, 0, 10, comm );
+	MPI_Send( &communicate_time,       1, MPI_DOUBLE, 0, 20, comm );
+	MPI_Send(          &namelen,       1,    MPI_INT, 0, 30, comm );
+	MPI_Send(    processor_name, namelen+1,   MPI_CHAR, 0, 40, comm );// namelen+1 是为了最后一个字符 \0 也发送
     }
     else
     {
-        //printf("node: %d begins to recv.\n", node);
         compute_time /= CLOCKS_PER_SEC;
         communicate_time /= CLOCKS_PER_SEC;
         all_time = new double [total_node*2];
@@ -1011,11 +1055,11 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 	
 	for( int n(1); n<total_node; n++ )
 	{
-	    MPI_Recv( &all_time[2*n]  , 1, MPI_DOUBLE, n, 1, comm, &status );
-	    MPI_Recv( &all_time[2*n+1], 1, MPI_DOUBLE, n, 2, comm, &status );
-	    MPI_Recv( &all_processor_namelen[n], 1, MPI_INT, n, 3, comm, &status );
+	    MPI_Recv( &all_time[2*n]  , 1, MPI_DOUBLE, n, 10, comm, &status );
+	    MPI_Recv( &all_time[2*n+1], 1, MPI_DOUBLE, n, 20, comm, &status );
+	    MPI_Recv( &all_processor_namelen[n], 1, MPI_INT, n, 30, comm, &status );
 	    all_processor_name[n] = new char [MPI_MAX_PROCESSOR_NAME];
-	    MPI_Recv( all_processor_name[n], all_processor_namelen[n]+1, MPI_CHAR, n, 4, comm, &status );
+	    MPI_Recv( all_processor_name[n], all_processor_namelen[n]+1, MPI_CHAR, n, 40, comm, &status );
 	}
 	
 	compute_time = 0;
@@ -1040,6 +1084,7 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 	    delete [] all_processor_name[n];
 	delete [] all_processor_name;
     }
+    
 
     delete [] Ci_mpi;
 
