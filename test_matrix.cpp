@@ -21,37 +21,39 @@ int main( int argc, char *argv[] )
     int node, total_node;
     MPI_Comm_size( MPI_COMM_WORLD, &total_node );
     MPI_Comm_rank( MPI_COMM_WORLD, &node );
-    //cout << "node: " << node << "输入矩阵倍数: " << endl;
-    //cin >> multi;
-    //cout << "node: " << node << "已接受" << endl;
-    multi = atoi(argv[1]);
-    int nrow1 = 10*multi;
-    int ncol1 = 10*multi;
+
+    int nrow1 = atoi(argv[1]);
+    int ncol1 = atoi(argv[2]);
     int nrow2 = ncol1;
-    int ncol2 = 10*multi;
+    int ncol2 = atoi(argv[3]);
     MatrixDense<double> A(nrow1, ncol1, "aaa");
     A.SetAllValue(10, "dRANDOM");
     //A.WriteMatlabDense("./data/aaa.dat");
     //A.Show(9);
     MatrixDense<double> B(nrow2, ncol2, "bbb");
     B.SetAllValue(13, "dRANDOM");
+    //B.Show(9);
     //MatrixDense<double> C = A*B;
-    /*
-    start = clock();
-    MatrixDense<double> D = A.MultiplyDirect(B);
-    end = clock();
-    time = (double)(end - start) / CLOCKS_PER_SEC;
-    if( node == 0 )
-        printf("MultiplyDirect    using time = %f\n", time);
+    //C.Show(9);
     
     start = clock();
-    MatrixDense<double> B_T = B.Transform();
-    MatrixDense<double> F = A.MultiplyTransform(B_T);
+    //MatrixDense<double> D = A.MultiplyDirect(B);
+    //D.Show(9);
     end = clock();
     time = (double)(end - start) / CLOCKS_PER_SEC;
-    if( node == 0 )
-        printf("MultiplyTransform using time = %f\n", time);
-    */    
+    //if( node == 0 )
+        //printf("MultiplyDirect    using time = %f\n", time);
+    
+    start = clock();
+    //MatrixDense<double> B_T = B.Transform();
+    //B_T.Show(9);
+    //MatrixDense<double> F = A.MultiplyTransform(B_T);
+    //F.Show(9);
+    end = clock();
+    time = (double)(end - start) / CLOCKS_PER_SEC;
+    //if( node == 0 )
+        //printf("MultiplyTransform using time = %f\n", time);
+        
     start = clock();
     MatrixDense<double> E = A.MultiplyMPI(B, MPI_COMM_WORLD);
     end = clock();
@@ -59,12 +61,15 @@ int main( int argc, char *argv[] )
     if( node == 0 )
         printf("Calling MultiplyMPI() time = %f\n", time);
     
-    /*    
+     /* 
     if( node == 0 )
     {
         cout << "check result: ";
-        MatrixDense<double> W = D-F;
+        MatrixDense<double> W = C-D;
         cout << W.IsZero();
+        
+        W = D-F;
+        cout << ", " << W.IsZero();
 
         W = F-E;
         cout << ", " << W.IsZero();
