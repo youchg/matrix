@@ -780,39 +780,11 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
 			    for( j=jt; j<jtF; j++ )
 			    {
 				tmp = (Type)0.0;
-				//Type aaa = Cval[i][j];
-				//Type aaa2 = Cval[i][j];
-				//double bbb = 0.0;
-				//double vvv = Cval[i][j];
-			        //printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]);
 				for( k=kt; k<ktF; k++ )
 				{
 				    tmp += Aval[i][k] * Bval[j][k];
 				    //Cval[i][j] += Aval[i][k] * Bval[j][k];
-				    //aaa += Aval[i][k] * Bval[j][k];
-				    //vvv += Aval[i][k] * Bval[j][k];
-				    //bbb += Aval[i][k] * Bval[j][k];
 				}
-				/*
-				if( 1 || Cval[i][j]+tmp != aaa )
-				{
-				    printf("%d,%d,%d,%d,%d,%d\n", i, j, k, it, jt, kt );
-				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]);
-				    printf("tmp   = %21.18f\n", tmp);
-				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]+tmp);
-				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]+aaa-aaa2);
-				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]+bbb);
-				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]+vvv-aaa2);
-				    printf("aaa   = %21.18f\n", aaa);
-				    printf("vvv   = %21.18f\n", vvv);
-				    printf("bbb   = %21.18f\n", bbb);
-				    printf("tmp   = %21.18f\n", tmp);
-				    printf("a--   = %21.18f\n", aaa-aaa2);
-				    printf("lll   = %21.18f\n", 106.018340344212788295+35.148062809877202994);
-				    printf("hhh   = %21.18f\n", 2.0/3.0+2.0/3.0);
-				    exit(1);
-				}
-				*/
 				Cval[i][j] += tmp;
 			    }
 			}
