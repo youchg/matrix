@@ -102,14 +102,16 @@ public:
                               const int col_begin, const int col_end,
                               const MatrixDense &B,
                               const int B_row_begin, const int B_row_end,
-                              const int B_col_begin, const int B_col_end)const;
+                              const int B_col_begin, const int B_col_end,
+			      const int FACTOR = 1)const;
     MatrixDense MultiplyDirect(const MatrixDense &B)const; // A*B
-    MatrixDense MultiplyTransform(const MatrixDense &B)const; // A*B_T
+    MatrixDense MultiplyTransform(const MatrixDense &B, 
+                                  const int FACTOR = 1)const; // A*B_T
     MatrixDense MultiplyMPI(const MatrixDense &B, const MPI_Comm comm)const; // A*B
     MatrixDense Transform()const;
     MatrixDense Sub(const int row_begin, const int row_end,
                     const int col_begin, const int col_end)const;
-    int IsZero() const;
+    int IsZero(const Type tol = (Type)0.0000000001) const;
 };
 
 #if 0
@@ -192,8 +194,11 @@ MatrixDense<Type>::MatrixDense(const int nr, const int nc,
 	else
 	{
 	    for( int i(0); i<nr; i++ )
+	    {
+		//memset( val[i], 0, nc*sizeof(Type) );
 		for( int j(0); j<nc; j++ )
-		    val[i][j] = 0;
+		    val[i][j] = 0.0;
+	    }
 	}
     }
     else
@@ -678,13 +683,16 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
     return C;
 }
 
+#define MST_MODE 2
+
 template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
                               const int row_begin, const int row_end,
                               const int col_begin, const int col_end,
                               const MatrixDense &B,
                               const int B_row_begin, const int B_row_end,
-                              const int B_col_begin, const int B_col_end)const
+                              const int B_col_begin, const int B_col_end,
+			      const int FACTOR)const
 {
 #if DEBUG_MODE > PRINT_ALL
     cout << MatrixBase::GetName() 
@@ -741,6 +749,7 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
         
         if( col_begin==0 && B_col_begin==0 )
         {
+#if MST_MODE == 1
             for( int i(0); i<nrow1; i++ )
             {
 	        for( int j(0); j<nrow2; j++ )
@@ -753,6 +762,64 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
 	            Cval[i][j] = tmp;
 	        }
             }
+#else
+//#define FACTOR   2
+	    int i(0), j(0), k(0), it(0), jt(0), kt(0);
+	    int itF, jtF, ktF;
+	    for( it=0; it<nrow1; it+=FACTOR )
+	    {
+		itF = it+FACTOR;
+		for( jt=0; jt<nrow2; jt+=FACTOR )
+		{
+		    jtF = jt+FACTOR;
+		    for( kt=0; kt<ncol1; kt+=FACTOR)
+		    {
+			ktF = kt+FACTOR;
+			for( i=it; i<itF; i++)
+			{
+			    for( j=jt; j<jtF; j++ )
+			    {
+				tmp = (Type)0.0;
+				//Type aaa = Cval[i][j];
+				//Type aaa2 = Cval[i][j];
+				//double bbb = 0.0;
+				//double vvv = Cval[i][j];
+			        //printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]);
+				for( k=kt; k<ktF; k++ )
+				{
+				    tmp += Aval[i][k] * Bval[j][k];
+				    //Cval[i][j] += Aval[i][k] * Bval[j][k];
+				    //aaa += Aval[i][k] * Bval[j][k];
+				    //vvv += Aval[i][k] * Bval[j][k];
+				    //bbb += Aval[i][k] * Bval[j][k];
+				}
+				/*
+				if( 1 || Cval[i][j]+tmp != aaa )
+				{
+				    printf("%d,%d,%d,%d,%d,%d\n", i, j, k, it, jt, kt );
+				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]);
+				    printf("tmp   = %21.18f\n", tmp);
+				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]+tmp);
+				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]+aaa-aaa2);
+				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]+bbb);
+				    printf("(%d,%d) = %21.18f\n", i, j, Cval[i][j]+vvv-aaa2);
+				    printf("aaa   = %21.18f\n", aaa);
+				    printf("vvv   = %21.18f\n", vvv);
+				    printf("bbb   = %21.18f\n", bbb);
+				    printf("tmp   = %21.18f\n", tmp);
+				    printf("a--   = %21.18f\n", aaa-aaa2);
+				    printf("lll   = %21.18f\n", 106.018340344212788295+35.148062809877202994);
+				    printf("hhh   = %21.18f\n", 2.0/3.0+2.0/3.0);
+				    exit(1);
+				}
+				*/
+				Cval[i][j] += tmp;
+			    }
+			}
+		    }
+		}
+	    }
+#endif
         }
         else
         {
@@ -803,7 +870,8 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyDirect(const MatrixDense &B)const
 }
 
 template <typename Type>
-MatrixDense<Type> MatrixDense<Type>::MultiplyTransform(const MatrixDense &B)const
+MatrixDense<Type> MatrixDense<Type>::MultiplyTransform(const MatrixDense &B,
+	                                               const int FACTOR)const
 {
 #if DEBUG_MODE > PRINT_ALL
     cout << MatrixBase::GetName() 
@@ -821,7 +889,7 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyTransform(const MatrixDense &B)cons
     }
     
     return MultiplySliceTransform(   0, nrow1-1, 0, ncol1-1,
-                                  B, 0, nrow2-1, 0, ncol2-1);
+                                  B, 0, nrow2-1, 0, ncol2-1, FACTOR);
 }
 
 template <typename Type>
@@ -1092,17 +1160,21 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 }
 
 template <typename Type>
-int MatrixDense<Type>::IsZero() const
+int MatrixDense<Type>::IsZero(const Type tol) const
 {
     int nrow = MatrixBase::GetNRow();
     int ncol = MatrixBase::GetNCol();
+    Type max = (Type)0.0;
 
     for( int i(0); i<nrow; i++ )
     {
 	for( int j(0); j<ncol; j++ )
 	{
-	    if( val[i][j] != 0 )
+	    if( abs(val[i][j]) > tol )
+	    {
+		//printf("%20.10f,%20.10f\n", val[i][j],tol);
 		return 0;
+	    }
 	}
     }
 
