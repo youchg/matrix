@@ -990,7 +990,7 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 				 B_T,
 				 0, ncol2-1, 0, nrow2-1 );
     end11 = clock();
-    if(node == 0)
+    if(node == -1)
         printf("node = %d, time0 = %f\n", node, (double)(end11-start11)/CLOCKS_PER_SEC);
     MatrixDense<Type> C;
     if( node == 0 )
