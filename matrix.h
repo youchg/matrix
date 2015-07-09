@@ -1,10 +1,11 @@
 // matrix.h  -- matrix in dense and CSR format
+// but now in dense format only
 #ifndef _MATRIX_H_
 #define _MATRIX_H_
 
-#include <cstring>// memcpy
 #include <iostream>
 #include <fstream>
+#include <cstring> // for using function "memcpy"
 #include <cstdlib>
 #include <ctime>
 #include <cassert>
@@ -26,37 +27,34 @@ using std::endl;
 using std::ofstream;
 using std::ifstream;
 
+void Show_Calling_Function_Name(const string function_name, const string object_name="noname");
+
 class MatrixBase
 {
 private:
     string name;
-    int  nrow;
-    int  ncol;
+    int    nrow;
+    int    ncol;
 
 public:
 #if DEBUG_MODE > PRINT_ALL
-    MatrixBase(const int nr=0, 
-	       const int nc=0,
-	       const string str="noname");
+    MatrixBase(const int nr=0, const int nc=0, const string str="noname");
     virtual ~MatrixBase();
 #else
-    MatrixBase(const int nr=0, 
-	       const int nc=0,
-	       const string str="noname")
-	       : name(str), nrow(nr), ncol(nc) {}
+    MatrixBase(const int nr=0, const int nc=0, const string str="noname")
+	      :name(str), nrow(nr), ncol(nc){}
     virtual ~MatrixBase(){}
 #endif
-    int GetNRow(void)const { return nrow; }
-    int GetNCol(void)const { return ncol; }
-    string GetName(void)const { return name; }
+    int    GetNRow(void)const{return nrow;}
+    int    GetNCol(void)const{return ncol;}
+    string GetName(void)const{return name;}
 
-    void SetNRow(int nr){ nrow = nr; }
-    void SetNCol(int nc){ ncol = nc; }
-    void SetName(string na){ name = na; }
+    void SetNRow(int    nr){nrow = nr;}
+    void SetNCol(int    nc){ncol = nc;}
+    void SetName(string na){name = na;}
    
     virtual void Show(const int print_level=PRINT_FEW)const = 0;
-    //virtual void Write(const string filename, 
-	               //const string format)const = 0;
+    // virtual void Write(const string filename, const string format)const = 0;
 };
 
 template <typename Type>
@@ -66,20 +64,18 @@ private:
     Type **val;
 
 public:
-    MatrixDense(const int nr=0, const int nc=0,
-                const string str="noname", 
-	        const Type **va=0);
+    MatrixDense(const int nr=0, const int nc=0, const string str="noname", const Type **va=0);
     ~MatrixDense();
     MatrixDense(const MatrixDense &B);
 
-    void SetAllValue( const Type va, const string mode="CONSTANT" );// CONSTANT RANDOM
-    //还可以增加参数，使得能生成 DIAGONAL TRIDIAGONAL 等类型，
-    //但对于满矩阵处理来说，并不针对这些做优化
+    void SetAllValue( const Type va, const string mode="CONSTANT" ); // mode: CONSTANT or RANDOM
+    // 还可以增加参数，使得能生成 DIAGONAL TRIDIAGONAL 等类型，
+    // 但对于满矩阵处理来说，并不针对这些做优化
     virtual void Show (const int print_level=PRINT_FEW)const;
-    //virtual void Write(const string filename, 
-	               //const string format)const;
+    // virtual void Write(const string filename, const string format)const;
+    // should also add function "Read(...)"
 
-    MatrixDense & operator=(const MatrixDense &B); // A = B
+    MatrixDense & operator=(const MatrixDense &B);      // A = B
     MatrixDense   operator+(const MatrixDense &B)const; // A + B
     MatrixDense   operator-(const MatrixDense &B)const; // A - B
     MatrixDense   operator*(const MatrixDense &B)const; // A * B
@@ -87,16 +83,23 @@ public:
     MatrixDense   operator*(const Type alpha)const; // A * alpha 
     template <typename type>
     friend MatrixDense<type> operator*(const type alpha, const MatrixDense<type> &A); // alpha * A
+    
+    MatrixDense MultiplyDirect   (const MatrixDense &B)const; // A*B
+    MatrixDense MultiplyTransform(const MatrixDense &B, const int FACTOR = 1)const; // A*B^T
+    MatrixDense MultiplyMPI(const MatrixDense &B, const MPI_Comm comm)const; // parallel A*B
 
-public:
     void WritePS(const string filename)const; 
     void WriteMatlabDense(const string filename)const; 
     void ReadMatlabDense(const string filename);
+    
+    // A(row_begin:row_end, col_begin:col_end) * B(B_row_begin:B_row_end, B_col_begin:B_col_end)
     MatrixDense MultiplySlice(const int row_begin, const int row_end,
                               const int col_begin, const int col_end,
                               const MatrixDense &B,
                               const int B_row_begin, const int B_row_end,
                               const int B_col_begin, const int B_col_end)const;
+    // A(row_begin:row_end, col_begin:col_end) * B^T(B_row_begin:B_row_end, B_col_begin:B_col_end)
+    // FACTOR: 循环分块中块的大小，每块大小相等
     MatrixDense MultiplySliceTransform(
                               const int row_begin, const int row_end,
                               const int col_begin, const int col_end,
@@ -104,14 +107,10 @@ public:
                               const int B_row_begin, const int B_row_end,
                               const int B_col_begin, const int B_col_end,
 			      const int FACTOR = 1)const;
-    MatrixDense MultiplyDirect(const MatrixDense &B)const; // A*B
-    MatrixDense MultiplyTransform(const MatrixDense &B, 
-                                  const int FACTOR = 1)const; // A*B_T
-    MatrixDense MultiplyMPI(const MatrixDense &B, const MPI_Comm comm)const; // A*B
-    MatrixDense Transform()const;
+    MatrixDense Transform()const; // return A^T
     MatrixDense Sub(const int row_begin, const int row_end,
-                    const int col_begin, const int col_end)const;
-    int IsZero(const Type tol = (Type)0.0000000001) const;
+                    const int col_begin, const int col_end)const; // return A(row_begin:row_end, col_begin:col_end)
+    int IsZero(const Type tol = (Type)0.0000000001)const; // test wether A == 0
 };
 
 #if 0
@@ -151,10 +150,18 @@ public:
 }
 #endif
 
+void Show_Calling_Function_Name(const string function_name, const string object_name)
+{
+    if( object_name != "noname" )
+        cout << object_name << ": ";
+        
+    cout << function_name << endl;
+}
+
 
 
 #if DEBUG_MODE > PRINT_ALL
-//此时需要打印函数调用信息，所以不能使用内联函数
+//此时需要打印函数调用信息，所以不使用内联函数
 //否则直接在类里面定义即可
 MatrixBase::MatrixBase( const int nr, const int nc,
                         const string str)
@@ -170,33 +177,34 @@ MatrixBase::~MatrixBase()
 #endif
 
 template <typename Type>
-MatrixDense<Type>::MatrixDense(const int nr, const int nc, 
-	                 const string str,
-	                 const Type **va)
-	                 : MatrixBase(nr, nc,str)
+MatrixDense<Type>::MatrixDense(const int nr, const int nc, const string str, const Type **va)
+	                      :MatrixBase(nr, nc,str)
 {
 #if DEBUG_MODE > PRINT_ALL
     cout << MatrixBase::GetName() << ": calling MatrixDense constructor." << endl;
 #endif
-
     if( nr!=0 && nc!=0 )
     {
+        int i = 0;
+        int j = 0;
 	val = new Type* [nr];
-	for( int i(0); i<nr; i++ )
+	for( i=0; i<nr; i++ )
 	    val[i] = new Type [nc];
 
         if( va!=0 )
 	{
-	    for( int i(0); i<nr; i++ )
-		for( int j(0); j<nc; j++ )
+	    for( i=0; i<nr; i++ )
+	    {
+		for( j=0; j<nc; j++ )
 		    val[i][j] = va[i][j];
+            }
 	}
 	else
 	{
-	    for( int i(0); i<nr; i++ )
+	    for( i=0; i<nr; i++ )
 	    {
 		//memset( val[i], 0, nc*sizeof(Type) );
-		for( int j(0); j<nc; j++ )
+		for( j=0; j<nc; j++ )
 		    val[i][j] = 0.0;
 	    }
 	}
@@ -232,35 +240,38 @@ void MatrixDense<Type>::SetAllValue( const Type va, const string mode )
 //CONSTANT: 所有值设为 va
 //iRANDOM : 随机产生 int 类型的值，范围在 0-va 之间
 //dRANDOM : 随机产生 double 类型的值，范围在 0-va 之间
-//待处理  : va 与 0 的比较
+//待处理  : va 与 0 的比较，目前假定 va>0
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() << ": calling MatrixDense SetAllValue." << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense SetAllValue." << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
 
     int nrow = MatrixBase::GetNRow();
     int ncol = MatrixBase::GetNCol();
     if( nrow!=0 && ncol!=0 )
     {
+        int i = 0;
+        int j = 0;
         if( mode=="iRANDOM" )
         {
             srand(24);
-            for( int i(0); i<nrow; i++ )
-	        for( int j(0); j<ncol; j++ )
+            for( i=0; i<nrow; i++ )
+	        for( j=0; j<ncol; j++ )
 		    val[i][j] = rand()%((int)va);
         }
         else if( mode=="dRANDOM" )
         {
             srand(24);
             //srand( (unsigned)time(0) );
-            for( int i(0); i<nrow; i++ )
-	        for( int j(0); j<ncol; j++ )
+            for( i=0; i<nrow; i++ )
+	        for( j=0; j<ncol; j++ )
 		    val[i][j] = (Type)( rand() / ((double)RAND_MAX/va) );
         }
         else
         {
-	    for( int i(0); i<nrow; i++ )
-	        for( int j(0); j<ncol; j++ )
+	    for( i=0; i<nrow; i++ )
+	        for( j=0; j<ncol; j++ )
 		    val[i][j] = va;
         }        
     }
@@ -268,11 +279,10 @@ void MatrixDense<Type>::SetAllValue( const Type va, const string mode )
 
 template <typename Type>
 MatrixDense<Type>::MatrixDense(const MatrixDense<Type> &B)
-                              : MatrixBase(B)
+                              :MatrixBase(B)
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() << ": calling MatrixDense copy constructor." 
-         << endl;
+    cout << MatrixBase::GetName() << ": calling MatrixDense copy constructor." << endl;
 #endif
 
     int nrow = MatrixBase::GetNRow();
@@ -287,17 +297,11 @@ MatrixDense<Type>::MatrixDense(const MatrixDense<Type> &B)
 	    {
                 memcpy( val[i], B.val[i], ncol*sizeof(Type) );
 	    }
-        }
-/*
-//2015.6.6 ycg 注释此块
-        if( B.val!=0 )
-	{
-            for( int i(0); i<nrow; i++ )
+	    else
 	    {
-                memcpy( val[i], B.val[i], ncol*sizeof(Type) );
+	        memset( val[i], 0, ncol*sizeof(Type) );
 	    }
-	}
-*/
+        }
     }
     else
     {
@@ -309,15 +313,14 @@ template <typename Type>
 MatrixDense<Type> & MatrixDense<Type>::operator=(const MatrixDense<Type> &B)
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() << ": calling MatrixDense::operator=." 
-         << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::operator=."  << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     if( this == &B )
         return *this;
 
-    int nrow, ncol;
-    nrow = MatrixBase::GetNRow();
-    ncol = MatrixBase::GetNCol();
+    int nrow = MatrixBase::GetNRow();
+    int ncol = MatrixBase::GetNCol();
     if( nrow!=0 && ncol!=0 )
     {
 	for( int i(0); i<nrow; i++ )
@@ -332,15 +335,17 @@ MatrixDense<Type> & MatrixDense<Type>::operator=(const MatrixDense<Type> &B)
     {
 	val = new Type* [nrow];
 	for( int i(0); i<nrow; i++ )
-	    val[i] = new Type [ncol];
-        
-        if( B.val!=0 )
         {
-	    for( int i(0); i<nrow; i++ )
-                for( int j(0); j<ncol; j++ )
-	            val[i][j] = B.val[i][j];
-	        //memcpy( val[i], B.val[i], ncol*sizeof(Type) );
-	}
+            val[i] = new Type [ncol];
+            if( B.val != 0 )
+	    {
+                memcpy( val[i], B.val[i], ncol*sizeof(Type) );
+	    }
+	    else
+	    {
+	        memset( val[i], 0, ncol*sizeof(Type) );
+	    }
+        }
     }
     else
     {
@@ -354,8 +359,8 @@ template <typename Type>
 void MatrixDense<Type>::Show(const int print_level)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() << ": calling MatrixDense::Show(...)." 
-         << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::Show(...)." << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     if( print_level>PRINT_NONE )
     {
@@ -386,15 +391,14 @@ void MatrixDense<Type>::Show(const int print_level)const
     {
         cout << "==============================" << endl;
     }
-
 }
 
 template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::operator+(const MatrixDense<Type> &B)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() << ": calling MatrixDense::operator+" 
-         << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::operator+" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     int nrow = MatrixBase::GetNRow();
     int ncol = MatrixBase::GetNCol();
@@ -407,9 +411,11 @@ MatrixDense<Type> MatrixDense<Type>::operator+(const MatrixDense<Type> &B)const
     MatrixDense<Type> C(nrow, ncol,"SUM");
     if( nrow!=0 && ncol!=0 )
     {
-	for( int i(0); i<nrow; i++ )
+        int i = 0;
+        int j = 0;
+	for( i=0; i<nrow; i++ )
 	{
-	    for( int j(0); j<ncol; j++ )
+	    for( j=0; j<ncol; j++ )
 	    {
 		C.val[i][j] = val[i][j] + B.val[i][j];
 	    }
@@ -423,8 +429,8 @@ template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::operator-(const MatrixDense<Type> &B)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() << ": calling MatrixDense::operator-" 
-         << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::operator-" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     int nrow = MatrixBase::GetNRow();
     int ncol = MatrixBase::GetNCol();
@@ -437,9 +443,11 @@ MatrixDense<Type> MatrixDense<Type>::operator-(const MatrixDense<Type> &B)const
     MatrixDense<Type> C(nrow, ncol,"DIFF");
     if( nrow!=0 && ncol!=0 )
     {
-	for( int i(0); i<nrow; i++ )
+        int i = 0;
+        int j = 0;
+	for( i=0; i<nrow; i++ )
 	{
-	    for( int j(0); j<ncol; j++ )
+	    for( j=0; j<ncol; j++ )
 	    {
 		C.val[i][j] = val[i][j] - B.val[i][j];
 	    }
@@ -452,8 +460,8 @@ template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::operator*(const Type alpha)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() << ": calling MatrixDense::operator*" 
-         << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::operator*" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     int nrow = MatrixBase::GetNRow();
     int ncol = MatrixBase::GetNCol();
@@ -461,9 +469,11 @@ MatrixDense<Type> MatrixDense<Type>::operator*(const Type alpha)const
     MatrixDense<Type> C(nrow, ncol, "PRODUCT");
     if( nrow!=0 && ncol!=0 )
     {
-	for( int i(0); i<nrow; i++ )
+        int i = 0;
+        int j = 0;
+	for( i=0; i<nrow; i++ )
 	{
-	    for( int j(0); j<ncol; j++ )
+	    for( j=0; j<ncol; j++ )
 	    {
 		C.val[i][j] = val[i][j] * alpha;
 	    }
@@ -476,8 +486,8 @@ template <typename type>
 MatrixDense<type> operator*(const type alpha, const MatrixDense<type> &A)
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << A.GetName() << ": calling friend MatrixDense::operator*" 
-         << endl;
+    //cout << A.GetName() << ": calling friend MatrixDense::operator*" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     return A*alpha;
 }
@@ -486,8 +496,8 @@ template <typename Type>
 MatrixDense<Type>  MatrixDense<Type>::operator*(const MatrixDense<Type> &B)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() << ": calling MatrixDense::operator*" 
-         << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::operator*" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     int nrow1 = MatrixBase::GetNRow();
     int ncol1 = MatrixBase::GetNCol();
@@ -500,19 +510,24 @@ MatrixDense<Type>  MatrixDense<Type>::operator*(const MatrixDense<Type> &B)const
 	return MatrixDense<Type>();
     }
 
+#if DEBUG_MODE > PRINT_FEW
     clock_t start, end;
     start = clock();
+#endif
     
     MatrixDense<Type> C(nrow1, ncol2, "PRODUCT");
     if( nrow1!=0 && ncol1!=0 && ncol2!=0 )
     {
         Type tmp;
-        for( int i(0); i<nrow1; i++ )
+        int i = 0;
+        int j = 0;
+        int k = 0;
+        for( i=0; i<nrow1; i++ )
         {
-	    for( int j(0); j<ncol2; j++ )
+	    for( j=0; j<ncol2; j++ )
 	    {
 	        tmp = 0;
-	        for( int k(0); k<ncol1; k++ )
+	        for( k=0; k<ncol1; k++ )
 	        {
 		    tmp += val[i][k] * B.val[k][j];
 		    //C.val[i][j] += val[i][k] * B.val[k][j];
@@ -521,9 +536,12 @@ MatrixDense<Type>  MatrixDense<Type>::operator*(const MatrixDense<Type> &B)const
 	    }
         }
     }
+    
+#if DEBUG_MODE > PRINT_FEW
     end = clock();
     double time = (double)(end - start) / CLOCKS_PER_SEC;
     printf("MatrixDense::operator*---time = %f\n", time);
+#endif
 
     return C;
 }
@@ -544,14 +562,13 @@ template <typename Type>
 void MatrixDense<Type>::WriteMatlabDense(const string filename)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::WriteMatlabDense(...)" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::WriteMatlabDense(...)" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     ofstream fout(filename.c_str());
     if( !fout.is_open() )
     {
-	cout << "Error in MatrixDense::WriteMatlabDense: cannot open \"" 
-	     << filename << "\"!" << endl;
+	cout << "Error in MatrixDense::WriteMatlabDense: cannot open \"" << filename << "\"!" << endl;
 	return;
     }
     
@@ -561,9 +578,11 @@ void MatrixDense<Type>::WriteMatlabDense(const string filename)const
     fout << ncol << endl;
     fout << nrow*ncol << endl;
 
-    for( int i(0); i<nrow; i++ )
+    int i = 0;
+    int j = 0;
+    for( i=0; i<nrow; i++ )
     {
-	for( int j(0); j<ncol; j++ )
+	for( j=0; j<ncol; j++ )
 	{
 	    fout << i+1 << " " << j+1 << " "
 		 << val[i][j] << endl;
@@ -576,14 +595,13 @@ template <typename Type>
 void MatrixDense<Type>::ReadMatlabDense(const string filename)
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::ReadMatlabDense(...)" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::ReadMatlabDense(...)" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     ifstream fin(filename.c_str());
     if( !fin.is_open() )
     {
-	cout << "Error in MatrixDense::ReadMatlabDense: cannot open \"" 
-	     << filename << "\"!" << endl;
+	cout << "Error in MatrixDense::ReadMatlabDense: cannot open \"" << filename << "\"!" << endl;
 	return;
     }
 
@@ -592,9 +610,7 @@ void MatrixDense<Type>::ReadMatlabDense(const string filename)
 
     if( nnz != nrow*ncol )
     {
-	cout << "ERROR in MatrixDense::ReadMatlabDense: \""
-	     << filename << "\" is not a dense matrix format file."
-	     << endl;
+	cout << "ERROR in MatrixDense::ReadMatlabDense: \"" << filename << "\" is not a dense matrix format file." << endl;
 	return; 
     }
 
@@ -602,6 +618,7 @@ void MatrixDense<Type>::ReadMatlabDense(const string filename)
     {
 	for( int i(0); i<MatrixBase::GetNRow(); i++ )
 	    delete [] val[i];
+	    
 	delete [] val;
     }
 
@@ -629,8 +646,8 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
                          const int B_col_begin, const int B_col_end)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::MultiplySlice(...)" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::MultiplySlice(...)" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     assert( row_begin>=0 && row_end<MatrixBase::GetNRow() && 
             col_begin>=0 && col_end<MatrixBase::GetNCol() &&
@@ -644,7 +661,6 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
     int nrow2 = B_row_end - B_row_begin + 1;
     int ncol2 = B_col_end - B_col_begin + 1;
     
-
     if( ncol1 != nrow2 ) 
     {
 	cout << "ERROR in MatrixDense::MultiplySlice : Matrix dimensions must agree." << endl;
@@ -660,12 +676,15 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
     if( nrow1!=0 && ncol1!=0 && ncol2!=0 )
     {
         Type tmp;
-        for( int i(0); i<nrow1; i++ )
+        int i = 0;
+        int j = 0;
+        int k = 0;
+        for( i=0; i<nrow1; i++ )
         {
-	    for( int j(0); j<ncol2; j++ )
+	    for( j=0; j<ncol2; j++ )
 	    {
 	        tmp = 0;
-	        for( int k(0); k<ncol1; k++ )
+	        for( k=0; k<ncol1; k++ )
 	        {
 		    tmp += val[i+row_begin][k+col_begin] * B.val[k+B_row_begin][j+B_col_begin];
 	        }
@@ -683,7 +702,7 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySlice(
     return C;
 }
 
-#define MST_MODE 2
+#define MST_MODE 1
 
 template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
@@ -695,8 +714,8 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
 			      const int FACTOR)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::MultiplySliceTransform(...)" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::MultiplySliceTransform(...)" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     assert( row_begin>=0 && row_end<MatrixBase::GetNRow() && 
             col_begin>=0 && col_end<MatrixBase::GetNCol() &&
@@ -704,13 +723,12 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
             B_col_begin>=0 && B_col_end<B.GetNCol() &&
             row_end>=row_begin && col_end>=col_begin &&
             B_row_end>=B_row_begin && B_col_end>=B_col_begin);
-            
+          
     int nrow1 = row_end - row_begin + 1;
     int ncol1 = col_end - col_begin + 1;
     int nrow2 = B_row_end - B_row_begin + 1;
     int ncol2 = B_col_end - B_col_begin + 1;
     
-
     if( ncol1 != ncol2 ) 
     {
 	cout << "ERROR in MatrixDense::MultiplySliceTransform : Matrix dimensions must agree." << endl;
@@ -721,9 +739,7 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
     clock_t start, end;
     start = clock();
 #endif
-    
     MatrixDense<Type> C(nrow1, nrow2, "PRODUCT");
-    //printf("nrow1 = %d, ncol1 = %d, nrow2 = %d, ncol2 = %d \n", nrow1, ncol1, nrow2, ncol2);
     if( nrow1!=0 && ncol1!=0 && nrow2!=0 )
     {
         /*
@@ -746,16 +762,16 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
         Type ** Bval = B.val + B_row_begin;
         Type ** Cval = C.val;
         Type tmp;
-        
         if( col_begin==0 && B_col_begin==0 )
         {
 #if MST_MODE == 1
-            for( int i(0); i<nrow1; i++ )
+            int i(0), j(0), k(0);
+            for( i=0; i<nrow1; i++ )
             {
-	        for( int j(0); j<nrow2; j++ )
+	        for( j=0; j<nrow2; j++ )
 	        {
 	            tmp = 0;
-	            for( int k(0); k<ncol1; k++ )
+	            for( k=0; k<ncol1; k++ )
 	            {
 	    	        tmp += Aval[i][k] * Bval[j][k];
 	            }
@@ -795,12 +811,13 @@ MatrixDense<Type> MatrixDense<Type>::MultiplySliceTransform(
         }
         else
         {
-            for( int i(0); i<=nrow1; i++ )
+            int i(0), j(0), k(0);
+            for( i=0; i<nrow1; i++ )
             {
-	        for( int j(0); j<=nrow2; j++ )
+	        for( j=0; j<nrow2; j++ )
 	        {
 	            tmp = 0;
-	            for( int k(0); k<ncol1; k++ )
+	            for( k=0; k<ncol1; k++ )
 	            {
 	    	        tmp += Aval[i][k+col_begin] * Bval[j][k+B_col_begin];
 	            }
@@ -823,8 +840,8 @@ template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::MultiplyDirect(const MatrixDense &B)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::MultiplyDirect(...)" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::MultiplyDirect(...)" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     int nrow1 = MatrixBase::GetNRow();
     int ncol1 = MatrixBase::GetNCol();
@@ -846,8 +863,8 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyTransform(const MatrixDense &B,
 	                                               const int FACTOR)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::MultiplyTransform(...)" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::MultiplyTransform(...)" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     int nrow1 = MatrixBase::GetNRow();
     int ncol1 = MatrixBase::GetNCol();
@@ -868,8 +885,8 @@ template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::Transform()const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::Transform()" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::Transform()" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     int nrow = MatrixBase::GetNRow();
     int ncol = MatrixBase::GetNCol();
@@ -879,8 +896,9 @@ MatrixDense<Type> MatrixDense<Type>::Transform()const
     {
         if( val!=0 )
         {
-	    for( int i(0); i<nrow; i++ )
-                for( int j(0); j<ncol; j++ )
+            int i(0), j(0);
+	    for( i=0; i<nrow; i++ )
+                for( j=0; j<ncol; j++ )
 	            A_T.val[j][i] = val[i][j];
 	}
     }
@@ -899,8 +917,8 @@ MatrixDense<Type> MatrixDense<Type>::Sub(
                     const int col_begin, const int col_end)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::Sub(...)" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::Sub(...)" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
     int nrow = MatrixBase::GetNRow();
     int ncol = MatrixBase::GetNCol();
@@ -919,9 +937,10 @@ MatrixDense<Type> MatrixDense<Type>::Sub(
     MatrixDense<Type> S(nrow1, ncol1, "SUB");
     if( nrow1!=0 && ncol1!=0 )
     {
-        for( int i(0); i<nrow1; i++ )
+        int i(0), j(0);
+        for( i=0; i<nrow1; i++ )
         {
-	    for( int j(0); j<ncol1; j++ )
+	    for( j=0; j<ncol1; j++ )
 	    {
 		S.val[i][j] = val[i+row_begin][j+col_begin];
 	    }
@@ -941,41 +960,43 @@ template <typename Type>
 MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI_Comm comm)const
 {
 #if DEBUG_MODE > PRINT_ALL
-    cout << MatrixBase::GetName() 
-	 << ": calling MatrixDense::MultiplyMPI(...)" << endl;
+    //cout << MatrixBase::GetName() << ": calling MatrixDense::MultiplyMPI(...)" << endl;
+    Show_Calling_Function_Name(__FUNCTION, MatrixBase::GetName());
 #endif
 
-    clock_t start, end;
+    double start, end;
+    
     double compute_time = 0;
     double communicate_time = 0;
-    double *all_time = 0;
-    char **all_processor_name = 0;
-    int *all_processor_namelen = 0;
     
-    int node, total_node, namelen;
+    double *all_time = 0;
+    char  **all_processor_name = 0;
+    int    *all_processor_namelen = 0;
+    
+    int  node, total_node, namelen;
     char processor_name[MPI_MAX_PROCESSOR_NAME];
     MPI_Status status;
 
     MPI_Comm_size( comm, &total_node );
     MPI_Comm_rank( comm, &node );
     MPI_Get_processor_name( processor_name, &namelen );
-
-    //cout << "MPI total_node = " << total_node << endl;
     
-    start = clock();
+    start = MPI_Wtime();
+    
     int nrow1 = MatrixBase::GetNRow();
     int ncol1 = MatrixBase::GetNCol();
     int nrow2 = B.GetNRow();
     int ncol2 = B.GetNCol();
-    end = clock();
+    
+    end = MPI_Wtime();
     compute_time += (double)(end - start);
 
     assert( nrow1!=0 && ncol1!=0 && ncol2!=0 && ncol1==nrow2 );
     assert( nrow1%total_node==0 && ncol1%total_node==0 );// && ncol2%total_node==0 );
 
-    start = clock();
+    start = MPI_Wtime();
+    
     MatrixDense<Type> B_T = B.Transform();
-
     MatrixDense<Type> Ci;
     
     // 把 A 按行分成 total_node 份 Ai
@@ -983,15 +1004,11 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
     // 把 B 转置，调用下面的函数
     // 未测试 直接做矩阵相乘 与 先转置再调用转置版本相乘 的效率
     int sub_nrow = nrow1/total_node;
-    clock_t start11, end11;
-    start11 = clock();
     Ci = MultiplySliceTransform( node*sub_nrow, (node+1)*sub_nrow-1,
 	                         0, ncol1-1,
 				 B_T,
 				 0, ncol2-1, 0, nrow2-1 );
-    end11 = clock();
-    if(node == -1)
-        printf("node = %d, time0 = %f\n", node, (double)(end11-start11)/CLOCKS_PER_SEC);
+
     MatrixDense<Type> C;
     if( node == 0 )
     {
@@ -1013,84 +1030,68 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 
     Type *Ci_mpi = new Type [ncol2*sub_nrow];
 
-    end = clock();
+    end = MPI_Wtime();
     compute_time += (double)(end - start);
     
     if( node != 0 )
     {
-	start = clock();
+	start = MPI_Wtime();
 	int k = 0;
-	for( int i(0); i<sub_nrow; i++ )
+	int i(0), j(0);
+	for( i=0; i<sub_nrow; i++ )
 	{
-	    for( int j(0); j<ncol2; j++ )
+	    for( j=0; j<ncol2; j++ )
 	    {
 		Ci_mpi[k++] = Ci.val[i][j];
 	    }
 	}
-	
-	//end = clock();
-        //compute_time += (double)(end - start);
-        //communicate_time += (double)(end - start);
-        
-        //start = clock();
         
 	MPI_Send( Ci_mpi, ncol2*sub_nrow, datatype, 0, 1, comm );
 	
-	end = clock();
+	end = MPI_Wtime();
         communicate_time += (double)(end - start);
     }
     else
     {
 	for( int n(1); n<total_node; n++ )
 	{
-	    start = clock();
+	    start = MPI_Wtime();
 	    
 	    MPI_Recv( Ci_mpi, ncol2*sub_nrow, datatype, n, 1, comm, &status );
 	    
-	    //end = clock();
-	    //printf("Recv from %d: time = %f\n", n, (double)(end - start)/CLOCKS_PER_SEC);
-            //communicate_time += (double)(end - start);
-            
-            //start = clock();
 	    int k = 0;
-	    for( int i(0); i<sub_nrow; i++ )
+	    int i(0), j(0);
+	    for( i=0; i<sub_nrow; i++ )
 	    {
-		for( int j(0); j<ncol2; j++ )
+		for( j=0; j<ncol2; j++ )
 		{
 		    C.val[n*sub_nrow+i][j] = Ci_mpi[k++];
 		}
 	    }
-	    end = clock();
-            //compute_time += (double)(end - start);
-            communicate_time += (double)(end - start);
-            //printf("Recv from %d: time = %f\n", n, (double)(end - start)/CLOCKS_PER_SEC);
-	    
+	    end = MPI_Wtime();
+            communicate_time += (double)(end - start);    
 	}
     }
     
     
     if( node != 0 )
     {
-        compute_time /= CLOCKS_PER_SEC;
-        communicate_time /= CLOCKS_PER_SEC;
-	MPI_Send(     &compute_time,       1, MPI_DOUBLE, 0, 10, comm );
-	MPI_Send( &communicate_time,       1, MPI_DOUBLE, 0, 20, comm );
-	MPI_Send(          &namelen,       1,    MPI_INT, 0, 30, comm );
+	MPI_Send(     &compute_time,         1, MPI_DOUBLE, 0, 10, comm );
+	MPI_Send( &communicate_time,         1, MPI_DOUBLE, 0, 20, comm );
+	MPI_Send(          &namelen,         1,    MPI_INT, 0, 30, comm );
 	MPI_Send(    processor_name, namelen+1,   MPI_CHAR, 0, 40, comm );// namelen+1 是为了最后一个字符 \0 也发送
     }
     else
     {
-        compute_time /= CLOCKS_PER_SEC;
-        communicate_time /= CLOCKS_PER_SEC;
-        all_time = new double [total_node*2];
+        all_time    = new double [total_node*2];
         all_time[0] = compute_time;
         all_time[1] = communicate_time;
         
-	all_processor_name = new char* [total_node];
+	all_processor_name    = new char* [total_node];
 	all_processor_name[0] = new char [MPI_MAX_PROCESSOR_NAME];
 	strcpy( all_processor_name[0], processor_name );
 	
-	all_processor_namelen = new int [total_node];
+	all_processor_namelen    = new int [total_node];
 	all_processor_namelen[0] = namelen;
 	
 	for( int n(1); n<total_node; n++ )
@@ -1111,12 +1112,12 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 	    compute_time += all_time[2*n];
 	    communicate_time += all_time[2*n+1];
 	    printf("%3d %10s %12.6f %12.6f %12.6f\n", n, all_processor_name[n], 
-	                all_time[2*n], all_time[2*n+1], all_time[2*n]+all_time[2*n+1] );
+	           all_time[2*n], all_time[2*n+1], all_time[2*n]+all_time[2*n+1] );
 	    
 	}
 	printf("---------------------------------------------------------\n");
 	printf("%3s %10s %12.6f %12.6f %12.6f\n", "-", "total", 
-	                compute_time, communicate_time, compute_time+communicate_time);
+	       compute_time, communicate_time, compute_time+communicate_time);
 	printf("=========================================================\n");
 	delete [] all_time;
 	delete [] all_processor_namelen;
@@ -1125,7 +1126,6 @@ MatrixDense<Type> MatrixDense<Type>::MultiplyMPI(const MatrixDense &B, const MPI
 	delete [] all_processor_name;
     }
     
-
     delete [] Ci_mpi;
 
     return C;
@@ -1138,18 +1138,18 @@ int MatrixDense<Type>::IsZero(const Type tol) const
     int ncol = MatrixBase::GetNCol();
     Type max = (Type)0.0;
 
-    for( int i(0); i<nrow; i++ )
+    int i(0), j(0);
+    for( i=0; i<nrow; i++ )
     {
-	for( int j(0); j<ncol; j++ )
+	for( j=0; j<ncol; j++ )
 	{
 	    if( abs(val[i][j]) > tol )
 	    {
-		//printf("%20.10f,%20.10f\n", val[i][j],tol);
 		return 0;
 	    }
 	}
     }
-
+    
     return 1;
 }
 
